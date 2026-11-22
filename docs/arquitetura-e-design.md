@@ -128,6 +128,15 @@ Os registros brutos da API CKAN (`RawGerconRecord`) são convertidos para o mode
 - **Cancelado:** `CANCELADA`, `CANCELADA_SEM_REVERSAO`, `CONFIRMACAO_EXPIRADA`
 - **Devolvido:** `AGUARDA_REAVALIACAO`, `AGUARDA_REVERSAO`
 
+### Contrato inicial do PostgreSQL para o ETL
+
+A migração inicial em `supabase/migrations/20261122184000_create_solicitacoes.sql`
+cria a tabela `public.solicitacoes`, com chave composta
+`(ano_recurso, idsolicitacao)`. Os recursos CKAN de 2017–2026 consultados têm
+`idsolicitacao` preenchido e único dentro de cada ano; a unicidade entre versões
+futuras ainda precisa ser validada. O contrato de colunas, normalização e carga
+idempotente está descrito em [Contrato inicial do banco e do ETL](./contrato-banco-etl.md).
+
 ---
 
 ## 6. Desempenho e Motor de Agregação (`analytics.worker.ts`)
