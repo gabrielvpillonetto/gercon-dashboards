@@ -28,3 +28,14 @@ npm run dev
 ```
 
 Acesse `http://localhost:5173`. Na primeira abertura, os dados de 2025 serão baixados automaticamente da API CKAN de Porto Alegre e armazenados no navegador.
+
+## Preparação para Supabase
+
+O SDK `@supabase/supabase-js` e o cliente em `src/services/supabase.ts` estão
+disponíveis para a futura integração com o banco. Para configurar o ambiente
+local, copie `.env.example` para `.env.local` e preencha
+`VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` com os valores do projeto.
+
+O dashboard ainda busca os dados diretamente da API CKAN; instalar e configurar
+o SDK não altera essa origem. Nunca use a chave `service_role` no front-end:
+ela deve permanecer apenas no ambiente seguro do ETL.
