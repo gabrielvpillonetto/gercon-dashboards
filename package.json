@@ -8,6 +8,7 @@
     "dev": "vite apps/web --config apps/web/vite.config.ts",
     "build": "vue-tsc --noEmit -p apps/web/tsconfig.json && vite build apps/web --config apps/web/vite.config.ts",
     "preview": "vite preview apps/web --config apps/web/vite.config.ts",
+    "supabase:start": "bash scripts/start-supabase.sh",
     "etl": "tsx --tsconfig apps/etl/tsconfig.json apps/etl/index.ts",
     "etl:typecheck": "tsc --noEmit -p apps/etl/tsconfig.json"
   },
