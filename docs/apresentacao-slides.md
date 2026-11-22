@@ -248,7 +248,7 @@ Graças ao desacoplamento já construído no Vue 3:
   - `useGerconData.ts` passa a enviar os filtros reativos para o banco e receber `AggregatedDashboardData`.
 - **O que permanece intacto (zero retrabalho):**
   - Todos os componentes visuais (`KpiCards`, `StatusByUnitChart`, `DemandTimeSeriesChart`, `OperationalHeatmap`, `WaitTimeHistogramChart`, `FilterBar`, `AccessibleDataTable`).
-  - Contratos TypeScript (`src/types/gercon.ts`) e camada de acessibilidade.
+  - Contratos TypeScript (`apps/web/src/types/gercon.ts`) e camada de acessibilidade.
 
 <!--
 Notas do apresentador:

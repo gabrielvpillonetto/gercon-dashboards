@@ -5,10 +5,11 @@
   "description": "Dashboard interativo de filas de consultas GERCON - Porto Alegre (Dados Abertos 2025)",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
-    "preview": "vite preview",
-    "etl": "tsx etl/index.ts"
+    "dev": "vite apps/web --config apps/web/vite.config.ts",
+    "build": "vue-tsc --noEmit -p apps/web/tsconfig.json && vite build apps/web --config apps/web/vite.config.ts",
+    "preview": "vite preview apps/web --config apps/web/vite.config.ts",
+    "etl": "tsx --tsconfig apps/etl/tsconfig.json apps/etl/index.ts",
+    "etl:typecheck": "tsc --noEmit -p apps/etl/tsconfig.json"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.2",

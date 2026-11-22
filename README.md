@@ -9,7 +9,7 @@ Painel analítico interativo desenvolvido em **Vue 3 (Composition API) + TypeScr
   - Salva os registros normalizados no **IndexedDB** do navegador (com metadados em `localStorage`), garantindo carregamento instantâneo nas próximas visitas sem refazer o download.
   - Inclui barra de progresso, tratamento amigável de erros/timeouts e opção para atualizar ou alterar a abrangência/volume de amostra (`Porto Alegre` ou `Todo RS`, `15k` / `25k` / `50k` registros).
 - **Processamento em Segundo Plano (Web Worker)**:
-  - Toda filtragem e agregação é executada em `src/workers/analytics.worker.ts`, mantendo a interface responsiva (< 1s).
+  - Toda filtragem e agregação é executada em `apps/web/src/workers/analytics.worker.ts`, mantendo a interface responsiva (< 1s).
 - **Filtros Interativos**:
   - Especialidade médica, município de residência do paciente, classificação de risco, status na fila e período cronológico de solicitação.
 - **Visualizações Analíticas (Chart.js + D3.js)**:
@@ -22,6 +22,8 @@ Painel analítico interativo desenvolvido em **Vue 3 (Composition API) + TypeScr
 
 ## Como Executar
 
+Os comandos são executados na raiz do repositório; as dependências do front-end e do ETL são instaladas juntas.
+
 ```bash
 npm install
 npm run dev
@@ -31,11 +33,19 @@ Acesse `http://localhost:5173`. Na primeira abertura, os dados de 2025 serão ba
 
 ## Preparação para Supabase
 
-O SDK `@supabase/supabase-js` e o cliente em `src/services/supabase.ts` estão
+O SDK `@supabase/supabase-js` e o cliente em `apps/web/src/services/supabase.ts` estão
 disponíveis para a futura integração com o banco. Para configurar o ambiente
-local, copie `.env.example` para `.env.local` e preencha
+local, copie `apps/web/.env.example` para `apps/web/.env.local` e preencha
 `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` com os valores do projeto.
 
 O dashboard ainda busca os dados diretamente da API CKAN; instalar e configurar
 o SDK não altera essa origem. Nunca use a chave `service_role` no front-end:
 ela deve permanecer apenas no ambiente seguro do ETL.
+
+## Organização do repositório
+
+- `apps/web/`: dashboard Vue/Vite.
+- `apps/etl/`: pipeline de carga para o PostgreSQL.
+- `packages/gercon-domain/`: tipos e regras de domínio compartilhados entre o dashboard e o ETL.
+- `supabase/`: migrações do banco.
+- `docs/`: documentação do projeto e contrato entre o banco e o ETL.

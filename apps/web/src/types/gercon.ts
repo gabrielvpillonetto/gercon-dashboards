@@ -1,11 +1,6 @@
-export type NormalizedStatus =
-  | 'Aguardando'
-  | 'Agendado'
-  | 'Atendido'
-  | 'Cancelado'
-  | 'Devolvido'
+import type { GerconYear, NormalizedStatus } from '../../../../packages/gercon-domain'
 
-export type GerconYear = 2026 | 2025 | 2024 | 2023 | 2022 | 2021 | 2020 | 2019 | 2018 | 2017
+export type { GerconYear, NormalizedStatus } from '../../../../packages/gercon-domain'
 
 export type DataScope = 'poa' | 'rs'
 

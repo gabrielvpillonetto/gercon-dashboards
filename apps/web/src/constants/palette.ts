@@ -1,4 +1,6 @@
-import type { NormalizedStatus } from '@/types/gercon'
+import type { NormalizedStatus } from '../../../../packages/gercon-domain'
+
+export { normalizeGerconStatus } from '../../../../packages/gercon-domain'
 
 export const ALL_STATUSES: NormalizedStatus[] = [
   'Aguardando',
@@ -64,39 +66,6 @@ export const WAIT_TIME_BUCKETS = [
   { label: '181 a 365 dias', shortLabel: '181–365d', min: 181, max: 365 },
   { label: 'Mais de 365 dias', shortLabel: '> 365d', min: 366, max: Infinity },
 ] as const
-
-/**
- * Mapeia os valores reais de `situacaosolicitacao` do GERCON 2025
- * para as 5 categorias de rastreamento definidas no documento do projeto.
- */
-export function normalizeGerconStatus(raw: string | null | undefined): NormalizedStatus {
-  const s = (raw ?? '').trim().toUpperCase()
-  if (s === 'REALIZADA' || s === 'ENCERRADA' || s === 'ATENDIDO') {
-    return 'Atendido'
-  }
-  if (s === 'AGENDADA' || s === 'AGENDA_CONFIRMADA' || s === 'AGENDADO') {
-    return 'Agendado'
-  }
-  if (
-    s === 'CANCELADA' ||
-    s === 'CANCELADA_SEM_REVERSAO' ||
-    s === 'CONFIRMACAO_EXPIRADA' ||
-    s === 'CANCELADO'
-  ) {
-    return 'Cancelado'
-  }
-  if (
-    s === 'AGUARDA_REAVALIACAO' ||
-    s === 'AGUARDA_REVERSAO' ||
-    s === 'DEVOLVIDA' ||
-    s === 'DEVOLVIDO'
-  ) {
-    return 'Devolvido'
-  }
-  // AUTORIZADA, AUTORIZACAO_AUTOMATICA, AGUARDA_REGULACAO, PENDENTE,
-  // AGUARDA_MATRICIAMENTO, EM_MATRICIAMENTO, ENCAMINHADA_AO_NIR
-  return 'Aguardando'
-}
 
 export function normalizeRiskLabel(raw: string | null | undefined): string {
   const val = (raw ?? '').trim().toUpperCase()

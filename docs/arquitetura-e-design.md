@@ -57,14 +57,18 @@ flowchart TD
     Comp <-->|"postMessage: LOAD_DATA / AGGREGATE"| Worker
 ```
 
+O código de domínio compartilhado pelos aplicativos (anos e recursos CKAN,
+tipos de status e normalização do status) fica em
+`packages/gercon-domain/`, evitando que o ETL dependa diretamente do front-end.
+
 ### Papel de Cada Módulo
-- **`src/services/ckanService.ts`**: encapsula o mapeamento oficial dos 10 recursos CKAN (`2017` a `2026`), a construção das consultas SQL, paginação em lotes de 5.000 registros, controle de timeout e normalização dos campos brutos.
-- **`src/services/storageService.ts`**: gerencia o banco IndexedDB `gercon_poa_multiyear_db` com duas *object stores*:
+- **`apps/web/src/services/ckanService.ts`**: encapsula o mapeamento oficial dos 10 recursos CKAN (`2017` a `2026`), a construção das consultas SQL, paginação em lotes de 5.000 registros, controle de timeout e normalização dos campos brutos.
+- **`apps/web/src/services/storageService.ts`**: gerencia o banco IndexedDB `gercon_poa_multiyear_db` com duas *object stores*:
   - `record_chunks`: armazena blocos de 2.500 registros indexados por `year` (`by_year`), permitindo ler ou invalidar um único ano sem afetar os demais.
   - `metadata`: guarda data de sincronização, escopo (`poa` ou `rs`), contagem de registros e `resourceId` por ano.
-- **`src/workers/analytics.worker.ts`**: mantém o conjunto de registros do ano ativo em memória isolada e responde às mensagens `LOAD_DATA` e `AGGREGATE`.
-- **`src/composables/useGerconData.ts`**: coordena o ciclo de vida (verificação de cache → download sob demanda → persistência → hidratação do Worker → debounce de filtros).
-- **`src/components/*`**: componentes puramente orientados a dados já agregados, facilitando a futura migração para um back-end SQL/Supabase.
+- **`apps/web/src/workers/analytics.worker.ts`**: mantém o conjunto de registros do ano ativo em memória isolada e responde às mensagens `LOAD_DATA` e `AGGREGATE`.
+- **`apps/web/src/composables/useGerconData.ts`**: coordena o ciclo de vida (verificação de cache → download sob demanda → persistência → hidratação do Worker → debounce de filtros).
+- **`apps/web/src/components/*`**: componentes puramente orientados a dados já agregados, facilitando a futura migração para um back-end SQL/Supabase.
 
 ---
 
@@ -185,7 +189,7 @@ O painel traduz os quatro casos de uso definidos na especificação em visualiza
 
 Como o front-end já separa **aquisição de dados** (`services/`), **agregação** (`workers/`), **estado** (`composables/`) e **apresentação** (`components/`), a integração futura com o back-end proposto no artigo exige apenas:
 1. Criar o worker ETL (Node.js + GitHub Actions) para sincronizar diariamente os CSVs/CKAN no PostgreSQL do Supabase.
-2. Criar *views* ou funções RPC no PostgreSQL retornando exatamente os contratos TypeScript já definidos em `AggregatedDashboardData` (`src/types/gercon.ts`).
+2. Criar *views* ou funções RPC no PostgreSQL retornando exatamente os contratos TypeScript já definidos em `AggregatedDashboardData` (`apps/web/src/types/gercon.ts`).
 3. Trocar a chamada `requestAggregation()` em `useGerconData.ts` por chamadas à API PostgREST do Supabase — **zero alterações necessárias** nos gráficos Chart.js/D3.js ou na barra de filtros.
 
 ---

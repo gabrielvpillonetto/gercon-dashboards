@@ -14,15 +14,18 @@
  *   ETL_FORCE       "1" reprocessa mesmo se o CSV não mudou desde a última carga
  *   ETL_MAX_ROWS    para a leitura após N linhas (útil para testes)
  *
- * O esquema esperado está em etl/schema.sql.
+ * O esquema esperado está em apps/etl/schema.sql.
  */
 import { Readable, pipeline } from 'node:stream'
 import type { ReadableStream } from 'node:stream/web'
 import { parse } from 'csv-parse'
 import pg from 'pg'
-import { AVAILABLE_YEARS, GERCON_RESOURCES_BY_YEAR } from '../src/services/ckanService'
-import { normalizeGerconStatus } from '../src/constants/palette'
-import type { GerconYear } from '../src/types/gercon'
+import {
+  AVAILABLE_YEARS,
+  GERCON_RESOURCES_BY_YEAR,
+  normalizeGerconStatus,
+  type GerconYear,
+} from '../../packages/gercon-domain'
 
 // ---------------------------------------------------------------------------
 // Config
