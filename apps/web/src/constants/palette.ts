@@ -1,6 +1,6 @@
 import type { NormalizedStatus } from '../../../../packages/gercon-domain'
 
-export { normalizeGerconStatus } from '../../../../packages/gercon-domain'
+export { normalizeGerconStatus, normalizeRiskLabel } from '../../../../packages/gercon-domain'
 
 export const ALL_STATUSES: NormalizedStatus[] = [
   'Aguardando',
@@ -66,16 +66,3 @@ export const WAIT_TIME_BUCKETS = [
   { label: '181 a 365 dias', shortLabel: '181–365d', min: 181, max: 365 },
   { label: 'Mais de 365 dias', shortLabel: '> 365d', min: 366, max: Infinity },
 ] as const
-
-export function normalizeRiskLabel(raw: string | null | undefined): string {
-  const val = (raw ?? '').trim().toUpperCase()
-  if (!val || val === 'NENHUM' || val === 'NULL') return 'Não classificado'
-  const map: Record<string, string> = {
-    VERMELHO: 'Vermelho (Urgente)',
-    LARANJA: 'Laranja (Muito Urgente)',
-    AMARELO: 'Amarelo (Prioritário)',
-    VERDE: 'Verde (Pouco Urgente)',
-    AZUL: 'Azul (Eletivo)',
-  }
-  return map[val] ?? val.charAt(0) + val.slice(1).toLowerCase()
-}

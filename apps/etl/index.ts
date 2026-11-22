@@ -7,14 +7,15 @@
  *   ETL_DRY_RUN=1 ETL_MAX_ROWS=20000 npm run etl   # testa sem banco
  *
  * Variáveis de ambiente:
- *   DATABASE_URL    conexão Postgres; obrigatória fora do dry run
+ *   DATABASE_URL    connection string do Postgres do Supabase (usuário postgres, que ignora RLS);
+ *                   obrigatória fora do dry run
  *   ETL_YEARS       lista separada por vírgula (padrão: todos os anos)
  *   ETL_BATCH_SIZE  linhas por INSERT (padrão: 5000)
  *   ETL_DRY_RUN     "1" lê e normaliza, mas não grava nada
  *   ETL_FORCE       "1" reprocessa mesmo se o CSV não mudou desde a última carga
- *   ETL_MAX_ROWS    para a leitura após N linhas (útil para testes)
+ *   ETL_MAX_ROWS    para a leitura após N linhas; só no dry run, porque o contrato proíbe amostras no banco
  *
- * O esquema esperado está em apps/etl/schema.sql.
+ * Tabelas: supabase/migrations/ (solicitacoes, etl_runs). Contrato: docs/contrato-banco-etl.md.
  */
 import { Readable, pipeline } from 'node:stream'
 import type { ReadableStream } from 'node:stream/web'
@@ -24,6 +25,7 @@ import {
   AVAILABLE_YEARS,
   GERCON_RESOURCES_BY_YEAR,
   normalizeGerconStatus,
+  normalizeRiskLabel,
   type GerconYear,
 } from '../../packages/gercon-domain'
 
@@ -45,6 +47,8 @@ const config = {
 
 const invalidYears = config.years.filter((y) => !AVAILABLE_YEARS.includes(y))
 if (invalidYears.length > 0) throw new Error(`Anos inválidos em ETL_YEARS: ${invalidYears.join(', ')}`)
+if (config.maxRows !== Infinity && !config.dryRun) throw new Error('ETL_MAX_ROWS só pode ser usado com ETL_DRY_RUN=1.')
+if (!config.dryRun && !config.databaseUrl) throw new Error('Defina DATABASE_URL, ou use ETL_DRY_RUN=1 para rodar sem banco.')
 
 const CKAN_API = 'https://dadosabertos.poa.br/api/3/action'
 
@@ -91,78 +95,67 @@ async function fetchWithRetry(url: string, signal?: AbortSignal, attempts = 3): 
 // ---------------------------------------------------------------------------
 
 /**
- * Colunas gravadas em gercon.solicitacoes e seus tipos no Postgres.
- * É o único ponto a ajustar quando o esquema definitivo mudar.
+ * Colunas que o ETL grava em public.solicitacoes, com seus tipos no Postgres.
+ * created_at e updated_at ficam de fora: o banco e o upsert cuidam deles.
  */
 const COLUMNS = {
-  ano: 'smallint',
-  id_solicitacao: 'bigint',
+  ano_recurso: 'smallint',
+  idsolicitacao: 'bigint',
+  ckan_resource_id: 'uuid',
+  ckan_id: 'bigint',
   data_extracao: 'date',
   data_solicitacao: 'date',
-  data_consulta: 'date',
-  status_bruto: 'text',
-  status: 'gercon.status_normalizado',
-  classificacao_risco: 'text',
-  complexidade: 'text',
+  data_agendamento: 'date',
   especialidade: 'text',
   especialidade_mae: 'text',
   cid: 'text',
-  idade: 'smallint',
+  classificacao_risco: 'text',
   municipio_residencia: 'text',
-  cnes_solicitante: 'integer',
   unidade_solicitante: 'text',
-  cnes_executante: 'integer',
   unidade_executante: 'text',
-  municipio_executante: 'text',
-  tipo_consulta: 'text',
-  dias_fila_fonte: 'integer',
-  dias_espera: 'integer',
+  status_bruto: 'text',
+  status: 'text',
+  dias_espera: 'smallint',
 } as const
 
 type Row = Record<keyof typeof COLUMNS, string | number | null>
 type CsvRecord = Record<string, string | undefined>
 
-/** Converte uma linha do CSV em Row, ou retorna null se a linha for inválida. */
-function normalizeRow(csv: CsvRecord, ano: GerconYear): Row | null {
+/** Converte uma linha do CSV em Row seguindo docs/contrato-banco-etl.md, ou retorna null se for inválida. */
+function normalizeRow(csv: CsvRecord, ano: GerconYear, resourceId: string): Row | null {
   const idSolicitacao = toInt(csv.idsolicitacao)
   const dataSolicitacao = toDate(csv.data_solicitacao)
-  if (idSolicitacao === null || dataSolicitacao === null) return null
+  if (idSolicitacao === null || idSolicitacao <= 0 || dataSolicitacao === null) return null
 
-  const dataConsulta = toDate(csv.datahora_consulta)
-  const diasFila = toInt(csv.diasfilaespera)
+  const dataAgendamento = toDate(csv.datahora_consulta)
   const statusBruto = text(csv.situacaosolicitacao)?.toUpperCase() ?? 'DESCONHECIDO'
-  const risco = text(csv.corregulador)?.toUpperCase() ?? null
+  const especialidade = text(csv.especialidade) ?? 'Não informada'
 
   return {
-    ano,
-    id_solicitacao: idSolicitacao,
+    ano_recurso: ano,
+    idsolicitacao: idSolicitacao,
+    ckan_resource_id: resourceId,
+    ckan_id: null, // o CSV de upload não traz o _id do datastore CKAN
     data_extracao: toDate(csv.data_extracao),
     data_solicitacao: dataSolicitacao,
-    data_consulta: dataConsulta,
+    data_agendamento: dataAgendamento,
+    especialidade,
+    especialidade_mae: text(csv.especialidademae) ?? especialidade,
+    cid: text(csv.cid) ?? '—',
+    classificacao_risco: normalizeRiskLabel(csv.corregulador),
+    municipio_residencia: text(csv.municipio_residencia) ?? 'Não informado',
+    unidade_solicitante: text(csv.unidadesolicitante) ?? 'Não informada',
+    unidade_executante: text(csv.unidadeexecutante) ?? 'Aguardando definição de unidade',
     status_bruto: statusBruto,
     status: normalizeGerconStatus(statusBruto),
-    classificacao_risco: risco === 'NENHUM' || risco === 'NULL' ? null : risco,
-    complexidade: text(csv.complexidade),
-    especialidade: text(csv.especialidade),
-    especialidade_mae: text(csv.especialidademae) ?? text(csv.especialidade),
-    cid: text(csv.cid),
-    idade: toInt(csv.idade),
-    municipio_residencia: text(csv.municipio_residencia),
-    cnes_solicitante: toInt(csv.cnes_solicitante),
-    unidade_solicitante: text(csv.unidadesolicitante),
-    cnes_executante: toInt(csv.cnesexecutante),
-    unidade_executante: text(csv.unidadeexecutante),
-    municipio_executante: text(csv.municipio_executante),
-    tipo_consulta: text(csv.tipoconsulta),
-    dias_fila_fonte: diasFila,
-    dias_espera: computeWaitDays(dataSolicitacao, dataConsulta, diasFila),
+    dias_espera: computeWaitDays(dataSolicitacao, dataAgendamento, toInt(csv.diasfilaespera)),
   }
 }
 
-/** Dias entre solicitação e consulta; sem consulta, usa diasfilaespera. Descarta valores fora de 0..3650. */
-function computeWaitDays(solicitacao: string, consulta: string | null, diasFila: number | null) {
-  if (consulta) {
-    const diff = (Date.parse(consulta) - Date.parse(solicitacao)) / 86_400_000
+/** Dias entre solicitação e agendamento; sem agendamento, usa diasfilaespera. Descarta valores fora de 0..3650. */
+function computeWaitDays(solicitacao: string, agendamento: string | null, diasFila: number | null) {
+  if (agendamento) {
+    const diff = (Date.parse(agendamento) - Date.parse(solicitacao)) / 86_400_000
     if (diff >= 0 && diff <= 3650) return Math.round(diff)
   }
   if (diasFila !== null && diasFila >= 0 && diasFila <= 3650) return diasFila
@@ -193,49 +186,50 @@ function toDate(value: string | undefined): string | null {
 // ---------------------------------------------------------------------------
 
 const columnNames = Object.keys(COLUMNS) as (keyof typeof COLUMNS)[]
-const runIdParam = columnNames.length + 1
 
 /**
  * Upsert em lote com um único comando: cada coluna vira um array e o unnest() remonta as linhas.
  * Bem mais rápido que um INSERT por linha e sem precisar de tabela de staging.
+ * updated_at = now() marca as linhas tocadas nesta carga; deleteStaleRows depende disso.
  */
 const UPSERT_SQL = `
-  insert into gercon.solicitacoes (${columnNames.join(', ')}, etl_run_id)
-  select *, $${runIdParam}::bigint
-  from unnest(${columnNames.map((c, i) => `$${i + 1}::${COLUMNS[c]}[]`).join(', ')})
-  on conflict (ano, id_solicitacao) do update set
-    ${[...columnNames.slice(2), 'etl_run_id'].map((c) => `${c} = excluded.${c}`).join(',\n    ')}
+  insert into public.solicitacoes (${columnNames.join(', ')})
+  select * from unnest(${columnNames.map((c, i) => `$${i + 1}::${COLUMNS[c]}[]`).join(', ')})
+  on conflict (ano_recurso, idsolicitacao) do update set
+    ${columnNames.slice(2).map((c) => `${c} = excluded.${c}`).join(',\n    ')},
+    updated_at = now()
 `
 
-async function upsertBatch(db: pg.Pool, rows: Row[], runId: number): Promise<number> {
+async function upsertBatch(db: pg.Pool, rows: Row[]): Promise<number> {
   // O Postgres rejeita a mesma chave duas vezes no mesmo comando; a última ocorrência vence.
-  const unique = [...new Map(rows.map((r) => [r.id_solicitacao, r])).values()]
+  const unique = [...new Map(rows.map((r) => [r.idsolicitacao, r])).values()]
   const params = columnNames.map((c) => unique.map((r) => r[c]))
-  const result = await db.query(UPSERT_SQL, [...params, runId])
+  const result = await db.query(UPSERT_SQL, params)
   return result.rowCount ?? 0
 }
 
 async function wasAlreadyLoaded(db: pg.Pool, ano: number, lastModified: string | null) {
   const { rowCount } = await db.query(
-    `select 1 from gercon.etl_runs
-     where ano = $1 and status = 'success' and resource_last_modified = $2 limit 1`,
+    `select 1 from public.etl_runs
+     where ano_recurso = $1 and status = 'success' and resource_last_modified = $2 limit 1`,
     [ano, lastModified]
   )
   return (rowCount ?? 0) > 0
 }
 
+/** Registra o início da carga e devolve o id e o horário de início segundo o relógio do banco. */
 async function startRun(db: pg.Pool, ano: number, resourceId: string, lastModified: string | null) {
-  const { rows } = await db.query<{ id: number }>(
-    `insert into gercon.etl_runs (ano, resource_id, resource_last_modified)
-     values ($1, $2, $3) returning id`,
+  const { rows } = await db.query<{ id: number; iniciado_em: Date }>(
+    `insert into public.etl_runs (ano_recurso, ckan_resource_id, resource_last_modified)
+     values ($1, $2, $3) returning id, iniciado_em`,
     [ano, resourceId, lastModified]
   )
-  return rows[0].id
+  return rows[0]
 }
 
 async function finishRun(db: pg.Pool, runId: number, stats: Stats, error?: unknown) {
   await db.query(
-    `update gercon.etl_runs set
+    `update public.etl_runs set
        status = $2, linhas_lidas = $3, linhas_gravadas = $4,
        linhas_rejeitadas = $5, linhas_removidas = $6, erro = $7, finalizado_em = now()
      where id = $1`,
@@ -251,11 +245,11 @@ async function finishRun(db: pg.Pool, runId: number, stats: Stats, error?: unkno
   )
 }
 
-/** Remove do ano as solicitações que sumiram da fonte, ou seja, as que não foram tocadas nesta execução. */
-async function deleteStaleRows(db: pg.Pool, ano: number, runId: number) {
+/** Remove do ano as solicitações que sumiram da fonte, ou seja, as que não foram tocadas desde o início da carga. */
+async function deleteStaleRows(db: pg.Pool, ano: number, startedAt: Date) {
   const { rowCount } = await db.query(
-    'delete from gercon.solicitacoes where ano = $1 and etl_run_id <> $2',
-    [ano, runId]
+    'delete from public.solicitacoes where ano_recurso = $1 and updated_at < $2',
+    [ano, startedAt]
   )
   return rowCount ?? 0
 }
@@ -280,15 +274,13 @@ async function syncYear(db: pg.Pool | null, ano: GerconYear) {
     return
   }
 
-  // Leituras parciais (ETL_MAX_ROWS) não guardam last_modified, para não fazer a próxima carga completa ser pulada.
-  const isFullRead = config.maxRows === Infinity
-  const runId = db ? await startRun(db, ano, resourceId, isFullRead ? lastModified : null) : 0
+  const run = db ? await startRun(db, ano, resourceId, lastModified) : null
   const stats: Stats = { lidas: 0, gravadas: 0, rejeitadas: 0, removidas: 0 }
   const abort = new AbortController()
   const startedAt = Date.now()
 
   const write = async (rows: Row[]) => {
-    if (db && rows.length > 0) stats.gravadas += await upsertBatch(db, rows, runId)
+    if (db && rows.length > 0) stats.gravadas += await upsertBatch(db, rows)
   }
 
   try {
@@ -304,7 +296,7 @@ async function syncYear(db: pg.Pool | null, ano: GerconYear) {
       if (stats.lidas >= config.maxRows) break
       stats.lidas++
 
-      const row = normalizeRow(record, ano)
+      const row = normalizeRow(record, ano, resourceId)
       if (!row) {
         stats.rejeitadas++
         continue
@@ -324,9 +316,10 @@ async function syncYear(db: pg.Pool | null, ano: GerconYear) {
     await pendingWrite
     await write(batch)
 
-    // Só limpa linhas antigas se o arquivo foi lido por completo.
-    if (db && isFullRead) stats.removidas = await deleteStaleRows(db, ano, runId)
-    if (db) await finishRun(db, runId, stats)
+    if (db && run) {
+      stats.removidas = await deleteStaleRows(db, ano, run.iniciado_em)
+      await finishRun(db, run.id, stats)
+    }
 
     const secs = ((Date.now() - startedAt) / 1000).toFixed(1)
     log(
@@ -335,7 +328,7 @@ async function syncYear(db: pg.Pool | null, ano: GerconYear) {
         `${fmt(stats.rejeitadas)} rejeitadas, ${fmt(stats.removidas)} removidas`
     )
   } catch (err) {
-    if (db) await finishRun(db, runId, stats, err)
+    if (db && run) await finishRun(db, run.id, stats, err)
     throw err
   } finally {
     abort.abort() // encerra o download se a leitura parou antes do fim (ETL_MAX_ROWS ou erro)
@@ -343,10 +336,6 @@ async function syncYear(db: pg.Pool | null, ano: GerconYear) {
 }
 
 async function main() {
-  if (!config.dryRun && !config.databaseUrl) {
-    throw new Error('Defina DATABASE_URL, ou use ETL_DRY_RUN=1 para rodar sem banco.')
-  }
-
   const db = config.dryRun ? null : new pg.Pool({ connectionString: config.databaseUrl, max: 2 })
   console.log(`ETL GERCON: anos ${config.years.join(', ')}${config.dryRun ? ' (dry run)' : ''}`)
 

@@ -50,3 +50,16 @@ export function normalizeGerconStatus(raw: string | null | undefined): Normalize
   }
   return 'Aguardando'
 }
+
+export function normalizeRiskLabel(raw: string | null | undefined): string {
+  const val = (raw ?? '').trim().toUpperCase()
+  if (!val || val === 'NENHUM' || val === 'NULL') return 'Não classificado'
+  const map: Record<string, string> = {
+    VERMELHO: 'Vermelho (Urgente)',
+    LARANJA: 'Laranja (Muito Urgente)',
+    AMARELO: 'Amarelo (Prioritário)',
+    VERDE: 'Verde (Pouco Urgente)',
+    AZUL: 'Azul (Eletivo)',
+  }
+  return map[val] ?? val.charAt(0) + val.slice(1).toLowerCase()
+}
