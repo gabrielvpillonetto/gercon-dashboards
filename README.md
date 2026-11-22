@@ -35,8 +35,10 @@ Acesse `http://localhost:5173`. Na primeira abertura, os dados de 2025 serão ba
 
 O SDK `@supabase/supabase-js` e o cliente em `apps/web/src/services/supabase.ts` estão
 disponíveis para a futura integração com o banco. Para configurar o ambiente
-local, copie `apps/web/.env.example` para `apps/web/.env.local` e preencha
-`VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` com os valores do projeto.
+local, copie `.env.example` para `.env` na raiz do repositório e preencha os
+valores. O mesmo arquivo é lido pelo front-end (`VITE_SUPABASE_URL` e
+`VITE_SUPABASE_ANON_KEY`) e pelo ETL (`DATABASE_URL` e as variáveis `ETL_*`
+opcionais). O Vite só expõe ao navegador as variáveis com prefixo `VITE_`.
 
 Quando as variáveis estão configuradas, o dashboard consulta a tabela pública
 `solicitacoes` no Supabase. Sem essa configuração, ele mantém o fallback para a

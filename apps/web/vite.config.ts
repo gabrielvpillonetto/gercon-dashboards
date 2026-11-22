@@ -4,6 +4,8 @@ import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
+  // .env compartilhado com o ETL, na raiz do repositório. Só variáveis VITE_* chegam ao navegador.
+  envDir: fileURLToPath(new URL('../..', import.meta.url)),
   plugins: [vue()],
   resolve: {
     alias: {

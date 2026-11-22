@@ -1,4 +1,8 @@
+import { fileURLToPath } from 'node:url'
 import { AVAILABLE_YEARS, type GerconYear } from '../../packages/gercon-domain'
+
+/** .env compartilhado com o front-end, na raiz do repositório. */
+const SHARED_ENV_FILE = fileURLToPath(new URL('../../.env', import.meta.url))
 
 export interface EtlConfig {
   /** Connection string do Postgres do Supabase (usuário postgres, que ignora RLS). */
@@ -16,10 +20,12 @@ export interface EtlConfig {
 
 /** Lê as variáveis ETL_* e DATABASE_URL e falha cedo se a combinação for inválida. */
 export function loadEtlConfig(env: NodeJS.ProcessEnv = process.env): EtlConfig {
+  loadSharedEnvFile()
+
   const config: EtlConfig = {
     databaseUrl: env.DATABASE_URL ?? null,
     years: env.ETL_YEARS ? parseYears(env.ETL_YEARS) : AVAILABLE_YEARS,
-    batchSize: Number(env.ETL_BATCH_SIZE ?? 5000),
+    batchSize: Number(env.ETL_BATCH_SIZE || 5000),
     dryRun: env.ETL_DRY_RUN === '1',
     forceReload: env.ETL_FORCE === '1',
     maxRowsPerYear: env.ETL_MAX_ROWS ? Number(env.ETL_MAX_ROWS) : Infinity,
@@ -36,6 +42,18 @@ export function loadEtlConfig(env: NodeJS.ProcessEnv = process.env): EtlConfig {
   }
 
   return config
+}
+
+/**
+ * Carrega o .env da raiz, se existir. Em CI as variáveis vêm de secrets e o arquivo não existe.
+ * Variáveis já definidas no shell têm prioridade sobre as do arquivo.
+ */
+function loadSharedEnvFile() {
+  try {
+    process.loadEnvFile(SHARED_ENV_FILE)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+  }
 }
 
 function parseYears(value: string): GerconYear[] {
