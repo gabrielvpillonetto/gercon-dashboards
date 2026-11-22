@@ -38,9 +38,10 @@ disponíveis para a futura integração com o banco. Para configurar o ambiente
 local, copie `apps/web/.env.example` para `apps/web/.env.local` e preencha
 `VITE_SUPABASE_URL` e `VITE_SUPABASE_ANON_KEY` com os valores do projeto.
 
-O dashboard ainda busca os dados diretamente da API CKAN; instalar e configurar
-o SDK não altera essa origem. Nunca use a chave `service_role` no front-end:
-ela deve permanecer apenas no ambiente seguro do ETL.
+Quando as variáveis estão configuradas, o dashboard consulta a tabela pública
+`solicitacoes` no Supabase. Sem essa configuração, ele mantém o fallback para a
+API CKAN. Nunca use a chave `service_role` no front-end: ela deve permanecer
+apenas no ambiente seguro do ETL.
 
 ## Organização do repositório
 

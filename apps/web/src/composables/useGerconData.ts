@@ -11,6 +11,8 @@ import {
   loadDatasetFromBrowserStorage,
   saveDatasetToBrowserStorage,
 } from '@/services/storageService'
+import { fetchSupabaseYearData } from '@/services/supabaseService'
+import { isSupabaseConfigured } from '@/services/supabase'
 import type {
   AggregatedDashboardData,
   CacheMetadata,
@@ -187,15 +189,21 @@ export function useGerconData() {
     }
 
     try {
-      const { records, dataExtracao, resourceId } = await fetchGerconYearData({
+      const fetchOptions = {
         year,
         scope,
         targetCount,
         signal: activeAbortController.signal,
-        onProgress: (p) => {
+        onProgress: (p: DownloadProgress) => {
           progress.value = p
         },
-      })
+      }
+      const source = isSupabaseConfigured() ? 'Supabase' : 'API CKAN'
+      progress.value.message = `Consultando ${source} para o ano ${year}...`
+
+      const { records, dataExtracao, resourceId } = isSupabaseConfigured()
+        ? await fetchSupabaseYearData(fetchOptions)
+        : await fetchGerconYearData(fetchOptions)
 
       progress.value = {
         ...progress.value,
