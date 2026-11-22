@@ -6,11 +6,9 @@
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["node"],
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["../web/src/*"]
-    }
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "types": ["node"]
   },
-  "include": ["index.ts"]
+  "include": ["**/*.ts", "../../packages/gercon-domain/**/*.ts"]
 }
