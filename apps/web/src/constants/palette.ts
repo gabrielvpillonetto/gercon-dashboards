@@ -1,7 +1,5 @@
 import type { NormalizedStatus } from '../../../../packages/gercon-domain'
 
-export { normalizeGerconStatus, normalizeRiskLabel } from '../../../../packages/gercon-domain'
-
 export const ALL_STATUSES: NormalizedStatus[] = [
   'Aguardando',
   'Agendado',
@@ -55,14 +53,3 @@ export const HISTOGRAM_COLORS = [
   '#D55E00',
   '#8B2D00',
 ]
-
-export const WAIT_TIME_BUCKETS = [
-  { label: '0 a 7 dias', shortLabel: '0–7d', min: 0, max: 7 },
-  { label: '8 a 15 dias', shortLabel: '8–15d', min: 8, max: 15 },
-  { label: '16 a 30 dias', shortLabel: '16–30d', min: 16, max: 30 },
-  { label: '31 a 60 dias', shortLabel: '31–60d', min: 31, max: 60 },
-  { label: '61 a 90 dias', shortLabel: '61–90d', min: 61, max: 90 },
-  { label: '91 a 180 dias', shortLabel: '91–180d', min: 91, max: 180 },
-  { label: '181 a 365 dias', shortLabel: '181–365d', min: 181, max: 365 },
-  { label: 'Mais de 365 dias', shortLabel: '> 365d', min: 366, max: Infinity },
-] as const

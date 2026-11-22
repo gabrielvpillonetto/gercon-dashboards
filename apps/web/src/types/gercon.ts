@@ -1,4 +1,4 @@
-import type { GerconYear, NormalizedStatus } from '../../../../packages/gercon-domain'
+import type { NormalizedStatus } from '../../../../packages/gercon-domain'
 
 export type { GerconYear, NormalizedStatus } from '../../../../packages/gercon-domain'
 
@@ -9,77 +9,6 @@ export type TimeGranularity = 'weekly' | 'monthly'
 export type HeatmapDimension = 'especialidade' | 'risco' | 'mes'
 
 export type WaitTimeScope = 'atendidas' | 'todas'
-
-/**
- * Payload bruto retornado pela API CKAN (datastore_search_sql)
- * Recurso GERCON 2025: c0ed7103-fcbd-438e-a0c6-dd030248a1e0
- */
-export interface RawGerconRecord {
-  _id: number
-  data_extracao?: string | null
-  data_solicitacao: string | null
-  datahora_consulta: string | null
-  diasfilaespera: number | string | null
-  especialidade: string | null
-  especialidademae?: string | null
-  cid: string | null
-  corregulador: string | null
-  municipio_residencia: string | null
-  unidadesolicitante: string | null
-  unidadeexecutante: string | null
-  situacaosolicitacao: string | null
-}
-
-export interface CkanSqlResponse {
-  success: boolean
-  result: {
-    records: RawGerconRecord[]
-    fields?: Array<{ id: string; type: string }>
-    sql?: string
-  }
-  error?: {
-    message?: string
-    __type?: string
-  }
-}
-
-/**
- * Registro normalizado armazenado no navegador (IndexedDB) e consumido pelo Web Worker.
- * Segue o esquema clínico/localização/rastreamento definido no projeto GERCON.
- */
-export interface GerconRecord {
-  _id: number
-  data_solicitacao: string // YYYY-MM-DD
-  data_agendamento: string | null // YYYY-MM-DD (datahora_consulta)
-  especialidade: string
-  especialidade_mae: string
-  cid: string
-  classificacao_risco: string
-  municipio_residencia: string
-  unidade_solicitante: string
-  unidade_executante: string
-  status_bruto: string
-  status: NormalizedStatus
-  dias_espera: number | null
-}
-
-export interface CacheMetadata {
-  version: number
-  resourceId: string
-  year: GerconYear
-  scope: DataScope
-  recordCount: number
-  downloadedAt: string
-  dataExtracao: string | null
-}
-
-export interface DownloadProgress {
-  fetched: number
-  target: number
-  batch: number
-  totalBatches: number
-  message: string
-}
 
 export interface DashboardFilters {
   especialidade: string
@@ -175,12 +104,3 @@ export interface AggregatedDashboardData {
   waitTimeHistogram: WaitTimeHistogramData
   computeTimeMs: number
 }
-
-export type WorkerInMessage =
-  | { type: 'LOAD_DATA'; records: GerconRecord[] }
-  | { type: 'AGGREGATE'; filters: DashboardFilters }
-
-export type WorkerOutMessage =
-  | { type: 'DATA_LOADED'; count: number; options: FilterOptions }
-  | { type: 'AGGREGATED'; data: AggregatedDashboardData }
-  | { type: 'ERROR'; message: string }

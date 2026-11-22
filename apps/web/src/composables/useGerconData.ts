@@ -1,51 +1,33 @@
 import { onUnmounted, reactive, ref, watch } from 'vue'
+import { AVAILABLE_YEARS } from '../../../../packages/gercon-domain'
 import { ALL_STATUSES } from '@/constants/palette'
-import {
-  DEFAULT_YEAR,
-  fetchGerconYearData,
-  GERCON_RESOURCES_BY_YEAR,
-} from '@/services/ckanService'
-import {
-  clearYearCache,
-  listCachedYears,
-  loadDatasetFromBrowserStorage,
-  saveDatasetToBrowserStorage,
-} from '@/services/storageService'
-import { fetchSupabaseYearData } from '@/services/supabaseService'
+import { fetchDashboardData, fetchFilterOptions } from '@/services/dashboardService'
 import { isSupabaseConfigured } from '@/services/supabase'
 import type {
   AggregatedDashboardData,
-  CacheMetadata,
   DashboardFilters,
   DataScope,
-  DownloadProgress,
   FilterOptions,
-  GerconRecord,
   GerconYear,
-  WorkerInMessage,
-  WorkerOutMessage,
 } from '@/types/gercon'
 
-const DEFAULT_TARGET_COUNT = 25000
+const DEFAULT_YEAR: GerconYear = 2025
+const FILTER_DEBOUNCE_MS = 250
 
+/**
+ * Estado do dashboard. Os dados vêm já agregados do Supabase (RPCs dashboard_*),
+ * sobre todas as solicitações do ano; aqui só guardamos filtros e o último resultado.
+ */
 export function useGerconData() {
   const selectedYear = ref<GerconYear>(DEFAULT_YEAR)
   const selectedScope = ref<DataScope>('poa')
-  const selectedTargetCount = ref<number>(DEFAULT_TARGET_COUNT)
-  const cachedYears = ref<GerconYear[]>([])
 
-  const status = ref<'checking' | 'downloading' | 'ready' | 'error'>('checking')
+  /** loading: trocando ano/escopo (mostra o loader). ready: dashboard visível. */
+  const status = ref<'loading' | 'ready' | 'error'>('loading')
+  /** Recalculando após mudança de filtro, com o dashboard ainda visível. */
   const isComputing = ref(false)
   const errorMessage = ref<string | null>(null)
-  const loadedFromCache = ref(false)
-  const cacheMeta = ref<CacheMetadata | null>(null)
-  const progress = ref<DownloadProgress>({
-    fetched: 0,
-    target: DEFAULT_TARGET_COUNT,
-    batch: 0,
-    totalBatches: 5,
-    message: 'Verificando armazenamento local do navegador...',
-  })
+  const dataExtracao = ref<string | null>(null)
 
   const filterOptions = ref<FilterOptions>({
     especialidades: [],
@@ -70,222 +52,90 @@ export function useGerconData() {
 
   const aggregated = ref<AggregatedDashboardData | null>(null)
 
-  let worker: Worker | null = null
-  let activeAbortController: AbortController | null = null
+  let yearRequest: AbortController | null = null
+  let aggregationRequest: AbortController | null = null
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
 
-  async function refreshCachedYearsList() {
+  /** Busca os indicadores com os filtros atuais, cancelando a busca anterior ainda em andamento. */
+  async function refreshDashboard() {
+    aggregationRequest?.abort()
+    const request = new AbortController()
+    aggregationRequest = request
+    isComputing.value = true
+
     try {
-      cachedYears.value = await listCachedYears()
-    } catch {
-      cachedYears.value = []
+      aggregated.value = await fetchDashboardData(
+        selectedYear.value,
+        selectedScope.value,
+        { ...filters, statuses: [...filters.statuses] },
+        request.signal
+      )
+      status.value = 'ready'
+    } catch (err) {
+      if (request.signal.aborted) return
+      errorMessage.value = err instanceof Error ? err.message : 'Erro ao consultar o Supabase.'
+      status.value = 'error'
+    } finally {
+      if (aggregationRequest === request) isComputing.value = false
     }
   }
 
-  function ensureWorker(): Worker {
-    if (!worker) {
-      worker = new Worker(new URL('../workers/analytics.worker.ts', import.meta.url), {
-        type: 'module',
-      })
-      worker.onmessage = (event: MessageEvent<WorkerOutMessage>) => {
-        const msg = event.data
-        if (msg.type === 'DATA_LOADED') {
-          filterOptions.value = msg.options
-          filters.especialidade = ''
-          filters.municipio = ''
-          filters.classificacaoRisco = ''
-          filters.statuses = [...ALL_STATUSES]
-          filters.dataInicio = msg.options.minDate
-          filters.dataFim = msg.options.maxDate
-          requestAggregation()
-        } else if (msg.type === 'AGGREGATED') {
-          aggregated.value = msg.data
-          isComputing.value = false
-          status.value = 'ready'
-        } else if (msg.type === 'ERROR') {
-          errorMessage.value = msg.message
-          isComputing.value = false
-          status.value = 'error'
-        }
-      }
-      worker.onerror = (err) => {
-        errorMessage.value = `Falha no Web Worker de análise: ${err.message}`
-        isComputing.value = false
-        status.value = 'error'
-      }
-    }
-    return worker
-  }
-
-  function hydrateWorker(records: GerconRecord[]) {
-    isComputing.value = true
-    const w = ensureWorker()
-    const payload: WorkerInMessage = { type: 'LOAD_DATA', records }
-    w.postMessage(payload)
-  }
-
-  function requestAggregation() {
-    if (!worker) return
-    isComputing.value = true
-    const snapshot: DashboardFilters = {
-      especialidade: filters.especialidade,
-      municipio: filters.municipio,
-      statuses: [...filters.statuses],
-      classificacaoRisco: filters.classificacaoRisco,
-      dataInicio: filters.dataInicio,
-      dataFim: filters.dataFim,
-      granularity: filters.granularity,
-      heatmapDimension: filters.heatmapDimension,
-      waitTimeScope: filters.waitTimeScope,
-      topUnitsLimit: filters.topUnitsLimit,
-    }
-    const payload: WorkerInMessage = { type: 'AGGREGATE', filters: snapshot }
-    worker.postMessage(payload)
-  }
-
+  // Mudanças de filtro (já com o dashboard na tela) recalculam no banco, com debounce.
   watch(
-    () => ({
-      especialidade: filters.especialidade,
-      municipio: filters.municipio,
-      statuses: filters.statuses.join(','),
-      classificacaoRisco: filters.classificacaoRisco,
-      dataInicio: filters.dataInicio,
-      dataFim: filters.dataFim,
-      granularity: filters.granularity,
-      heatmapDimension: filters.heatmapDimension,
-      waitTimeScope: filters.waitTimeScope,
-      topUnitsLimit: filters.topUnitsLimit,
-    }),
+    () => ({ ...filters, statuses: filters.statuses.join(',') }),
     () => {
       if (status.value !== 'ready') return
       if (debounceTimer) clearTimeout(debounceTimer)
-      debounceTimer = setTimeout(() => {
-        requestAggregation()
-      }, 40)
+      debounceTimer = setTimeout(refreshDashboard, FILTER_DEBOUNCE_MS)
     }
   )
 
-  async function downloadAndCache(
-    year: GerconYear = selectedYear.value,
-    scope: DataScope = selectedScope.value,
-    targetCount: number = selectedTargetCount.value
-  ) {
-    activeAbortController?.abort()
-    activeAbortController = new AbortController()
+  /** Carrega um ano/escopo: opções de filtro, filtros zerados e o primeiro cálculo. */
+  async function loadYear(year: GerconYear, scope: DataScope = selectedScope.value) {
+    yearRequest?.abort()
+    aggregationRequest?.abort()
+    if (debounceTimer) clearTimeout(debounceTimer)
+    const request = new AbortController()
+    yearRequest = request
 
     selectedYear.value = year
     selectedScope.value = scope
-    selectedTargetCount.value = targetCount
-
-    status.value = 'downloading'
+    status.value = 'loading'
     errorMessage.value = null
-    loadedFromCache.value = false
-    progress.value = {
-      fetched: 0,
-      target: targetCount,
-      batch: 0,
-      totalBatches: Math.ceil(targetCount / 5000),
-      message: `Conectando à API CKAN de Dados Abertos de Porto Alegre (GERCON ${year})...`,
-    }
 
-    try {
-      const fetchOptions = {
-        year,
-        scope,
-        targetCount,
-        signal: activeAbortController.signal,
-        onProgress: (p: DownloadProgress) => {
-          progress.value = p
-        },
-      }
-      const source = isSupabaseConfigured() ? 'Supabase' : 'API CKAN'
-      progress.value.message = `Consultando ${source} para o ano ${year}...`
-
-      const { records, dataExtracao, resourceId } = isSupabaseConfigured()
-        ? await fetchSupabaseYearData(fetchOptions)
-        : await fetchGerconYearData(fetchOptions)
-
-      progress.value = {
-        ...progress.value,
-        fetched: records.length,
-        message: `Salvando dados de ${year} no armazenamento local do navegador (IndexedDB)...`,
-      }
-
-      const meta: CacheMetadata = {
-        version: 1,
-        resourceId: resourceId || GERCON_RESOURCES_BY_YEAR[year],
-        year,
-        scope,
-        recordCount: records.length,
-        downloadedAt: new Date().toISOString(),
-        dataExtracao,
-      }
-
-      await saveDatasetToBrowserStorage(year, records, meta)
-      cacheMeta.value = meta
-      await refreshCachedYearsList()
-
-      progress.value = {
-        ...progress.value,
-        message: 'Inicializando motor de agregação (Web Worker)...',
-      }
-
-      hydrateWorker(records)
-    } catch (err) {
+    if (!isSupabaseConfigured()) {
       errorMessage.value =
-        err instanceof Error
-          ? err.message
-          : `Erro desconhecido ao baixar dados de ${year} do GERCON.`
+        'Supabase não configurado. Copie .env.example para .env na raiz do repositório e preencha VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.'
       status.value = 'error'
+      return
     }
-  }
-
-  async function loadYear(year: GerconYear) {
-    activeAbortController?.abort()
-    selectedYear.value = year
-    status.value = 'checking'
-    errorMessage.value = null
-    progress.value = {
-      fetched: 0,
-      target: selectedTargetCount.value,
-      batch: 0,
-      totalBatches: Math.ceil(selectedTargetCount.value / 5000),
-      message: `Verificando cache local para o ano ${year}...`,
-    }
-
-    await refreshCachedYearsList()
 
     try {
-      const cached = await loadDatasetFromBrowserStorage(year)
-      if (cached && cached.records.length > 0) {
-        loadedFromCache.value = true
-        cacheMeta.value = cached.meta
-        selectedScope.value = cached.meta.scope
-        hydrateWorker(cached.records)
-        return
-      }
-    } catch {
-      // Se IndexedDB falhar na leitura, prossegue com download limpo
+      const options = await fetchFilterOptions(year, scope, request.signal)
+      dataExtracao.value = options.dataExtracao
+      filterOptions.value = options
+      resetFilters()
+    } catch (err) {
+      if (request.signal.aborted) return
+      errorMessage.value = err instanceof Error ? err.message : 'Erro ao consultar o Supabase.'
+      status.value = 'error'
+      return
     }
 
-    await downloadAndCache(year, selectedScope.value, selectedTargetCount.value)
+    await refreshDashboard()
   }
 
-  async function initialize() {
-    await loadYear(selectedYear.value)
+  function initialize() {
+    return loadYear(selectedYear.value)
   }
 
-  async function switchYear(year: GerconYear) {
-    if (year === selectedYear.value && status.value === 'ready') return
-    await loadYear(year)
+  function switchYear(year: GerconYear) {
+    if (!AVAILABLE_YEARS.includes(year)) return
+    return loadYear(year)
   }
 
-  async function clearAndResync(scope: DataScope, targetCount = DEFAULT_TARGET_COUNT) {
-    const year = selectedYear.value
-    resetFilters()
-    await clearYearCache(year)
-    await refreshCachedYearsList()
-    await downloadAndCache(year, scope, targetCount)
+  function switchScope(scope: DataScope) {
+    return loadYear(selectedYear.value, scope)
   }
 
   function resetFilters() {
@@ -298,27 +148,24 @@ export function useGerconData() {
   }
 
   onUnmounted(() => {
-    activeAbortController?.abort()
+    yearRequest?.abort()
+    aggregationRequest?.abort()
     if (debounceTimer) clearTimeout(debounceTimer)
-    worker?.terminate()
   })
 
   return {
     selectedYear,
-    cachedYears,
+    selectedScope,
     status,
     isComputing,
     errorMessage,
-    loadedFromCache,
-    cacheMeta,
-    progress,
+    dataExtracao,
     filterOptions,
     filters,
     aggregated,
     initialize,
     switchYear,
-    downloadAndCache,
-    clearAndResync,
+    switchScope,
     resetFilters,
   }
 }

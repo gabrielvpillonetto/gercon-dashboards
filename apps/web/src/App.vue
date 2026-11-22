@@ -9,29 +9,25 @@ import OperationalHeatmap from '@/components/OperationalHeatmap.vue'
 import StatusByUnitChart from '@/components/StatusByUnitChart.vue'
 import WaitTimeHistogramChart from '@/components/WaitTimeHistogramChart.vue'
 import { useGerconData } from '@/composables/useGerconData'
-import { GERCON_RESOURCES_BY_YEAR } from '@/services/ckanService'
+import { GERCON_RESOURCES_BY_YEAR } from '../../../packages/gercon-domain'
 
 const {
   selectedYear,
-  cachedYears,
+  selectedScope,
   status,
   isComputing,
   errorMessage,
-  loadedFromCache,
-  cacheMeta,
-  progress,
+  dataExtracao,
   filterOptions,
   filters,
   aggregated,
   initialize,
   switchYear,
-  clearAndResync,
+  switchScope,
   resetFilters,
 } = useGerconData()
 
-const activeResourceId = computed(
-  () => cacheMeta.value?.resourceId ?? GERCON_RESOURCES_BY_YEAR[selectedYear.value]
-)
+const activeResourceId = computed(() => GERCON_RESOURCES_BY_YEAR[selectedYear.value])
 
 onMounted(() => {
   void initialize()
@@ -43,20 +39,18 @@ onMounted(() => {
 
   <AppHeader
     :selected-year="selectedYear"
-    :cached-years="cachedYears"
-    :cache-meta="cacheMeta"
-    :loaded-from-cache="loadedFromCache"
-    :is-busy="status === 'checking' || status === 'downloading'"
+    :selected-scope="selectedScope"
+    :data-extracao="dataExtracao"
+    :is-busy="status === 'loading'"
     @select-year="(yr) => switchYear(yr)"
-    @resync="(scope, count) => clearAndResync(scope, count)"
+    @select-scope="(scope) => switchScope(scope)"
   />
 
   <main id="main-content" class="app-container" tabindex="-1">
     <InitLoader
       v-if="status !== 'ready' || !aggregated"
       :year="selectedYear"
-      :status="status === 'ready' ? 'checking' : status"
-      :progress="progress"
+      :status="status === 'error' ? 'error' : 'loading'"
       :error-message="errorMessage"
       @retry="initialize"
     />
@@ -110,13 +104,13 @@ onMounted(() => {
         <p>
           <strong>Fonte:</strong> Dados Abertos de Porto Alegre — GERCON {{ selectedYear }} (CKAN
           Resource <code>{{ activeResourceId }}</code>).
-          <span v-if="cacheMeta?.dataExtracao">
-            Última extração na base oficial: <strong>{{ cacheMeta.dataExtracao }}</strong>.
+          <span v-if="dataExtracao">
+            Última extração na base oficial: <strong>{{ dataExtracao }}</strong>.
           </span>
         </p>
         <p>
           INF01006 — Projeto de Banco de Dados (UFRGS) • Front-end Vue 3 + TypeScript + Chart.js +
-          D3.js + Web Workers + Cache Local por Ano (IndexedDB).
+          D3.js • Indicadores agregados no Supabase (PostgreSQL) sobre 100% das solicitações.
         </p>
       </footer>
     </template>

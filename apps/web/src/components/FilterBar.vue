@@ -314,7 +314,7 @@ function isStatusSelected(st: NormalizedStatus): boolean {
           v-if="computeTimeMs !== null"
           class="badge badge-brand tabular-nums"
           aria-live="polite"
-          title="Tempo de agregação no Web Worker em segundo plano"
+          title="Tempo da consulta de agregação no banco (Supabase/PostgreSQL)"
         >
           <Zap :size="13" aria-hidden="true" />
           <span>{{ isComputing ? 'Recalculando...' : `Atualizado em ${computeTimeMs} ms` }}</span>

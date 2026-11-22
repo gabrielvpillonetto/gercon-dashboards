@@ -51,15 +51,27 @@ export function normalizeGerconStatus(raw: string | null | undefined): Normalize
   return 'Aguardando'
 }
 
+const RISK_LABELS: Record<string, string> = {
+  VERMELHO: 'Vermelho (Urgente)',
+  LARANJA: 'Laranja (Muito Urgente)',
+  AMARELO: 'Amarelo (Prioritário)',
+  VERDE: 'Verde (Pouco Urgente)',
+  AZUL: 'Azul (Eletivo)',
+}
+
+const UNCLASSIFIED_RISK_LABEL = 'Não classificado'
+
+/**
+ * Converte a cor de regulação do GERCON ("AMARELO") no rótulo de exibição ("Amarelo (Prioritário)").
+ * Aceita também um valor que já é rótulo (como os gravados pelo ETL no banco) e o devolve sem mudar,
+ * então pode ser aplicada mais de uma vez com segurança.
+ */
 export function normalizeRiskLabel(raw: string | null | undefined): string {
-  const val = (raw ?? '').trim().toUpperCase()
-  if (!val || val === 'NENHUM' || val === 'NULL') return 'Não classificado'
-  const map: Record<string, string> = {
-    VERMELHO: 'Vermelho (Urgente)',
-    LARANJA: 'Laranja (Muito Urgente)',
-    AMARELO: 'Amarelo (Prioritário)',
-    VERDE: 'Verde (Pouco Urgente)',
-    AZUL: 'Azul (Eletivo)',
+  const trimmed = (raw ?? '').trim()
+  if (trimmed === UNCLASSIFIED_RISK_LABEL || Object.values(RISK_LABELS).includes(trimmed)) {
+    return trimmed
   }
-  return map[val] ?? val.charAt(0) + val.slice(1).toLowerCase()
+  const val = trimmed.toUpperCase()
+  if (!val || val === 'NENHUM' || val === 'NULL') return UNCLASSIFIED_RISK_LABEL
+  return RISK_LABELS[val] ?? val.charAt(0) + val.slice(1).toLowerCase()
 }

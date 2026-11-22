@@ -4,12 +4,11 @@ Painel analítico interativo desenvolvido em **Vue 3 (Composition API) + TypeScr
 
 ## Funcionalidades Implementadas
 
-- **Ingestão sob demanda na primeira inicialização + Cache Local (IndexedDB)**:
-  - Consulta diretamente o recurso oficial de 2025 na API CKAN de Porto Alegre (`c0ed7103-fcbd-438e-a0c6-dd030248a1e0`) via proxy do Vite (`/ckan-api`).
-  - Salva os registros normalizados no **IndexedDB** do navegador (com metadados em `localStorage`), garantindo carregamento instantâneo nas próximas visitas sem refazer o download.
-  - Inclui barra de progresso, tratamento amigável de erros/timeouts e opção para atualizar ou alterar a abrangência/volume de amostra (`Porto Alegre` ou `Todo RS`, `15k` / `25k` / `50k` registros).
-- **Processamento em Segundo Plano (Web Worker)**:
-  - Toda filtragem e agregação é executada em `apps/web/src/workers/analytics.worker.ts`, mantendo a interface responsiva (< 1s).
+- **Agregação no banco (Supabase / PostgreSQL)**:
+  - O ETL (`apps/etl`) carrega 100% das solicitações de cada ano a partir dos CSVs oficiais do CKAN.
+  - Os indicadores são calculados por funções SQL expostas via PostgREST
+    (`dashboard_filter_options` e `dashboard_data`, em `supabase/migrations/`), sobre todas as linhas do ano.
+  - O front-end só envia ano, abrangência (`Porto Alegre` ou `Todo RS`) e filtros, e desenha o JSON recebido.
 - **Filtros Interativos**:
   - Especialidade médica, município de residência do paciente, classificação de risco, status na fila e período cronológico de solicitação.
 - **Visualizações Analíticas (Chart.js + D3.js)**:
@@ -29,20 +28,21 @@ npm install
 npm run dev
 ```
 
-Acesse `http://localhost:5173`. Na primeira abertura, os dados de 2025 serão baixados automaticamente da API CKAN de Porto Alegre e armazenados no navegador.
+Acesse `http://localhost:5173`. O dashboard precisa de um Supabase com as migrations
+aplicadas e dados carregados (veja abaixo).
 
-## Preparação para Supabase
+## Supabase e ETL
 
-O SDK `@supabase/supabase-js` e o cliente em `apps/web/src/services/supabase.ts` estão
-disponíveis para a futura integração com o banco. Para configurar o ambiente
-local, copie `.env.example` para `.env` na raiz do repositório e preencha os
+Localmente: `npx supabase start` sobe o banco, aplica as migrations e o seed
+(4 solicitações de teste por ano), e `npm run etl` carrega os dados reais
+(`ETL_YEARS=2025 npm run etl` para um ano só).
+
+Para configurar o ambiente, copie `.env.example` para `.env` na raiz do repositório e preencha os
 valores. O mesmo arquivo é lido pelo front-end (`VITE_SUPABASE_URL` e
 `VITE_SUPABASE_ANON_KEY`) e pelo ETL (`DATABASE_URL` e as variáveis `ETL_*`
 opcionais). O Vite só expõe ao navegador as variáveis com prefixo `VITE_`.
 
-Quando as variáveis estão configuradas, o dashboard consulta a tabela pública
-`solicitacoes` no Supabase. Sem essa configuração, ele mantém o fallback para a
-API CKAN. Nunca use a chave `service_role` no front-end: ela deve permanecer
+O dashboard chama as funções RPC com a chave `anon` (somente leitura). Nunca use a chave `service_role` no front-end: ela deve permanecer
 apenas no ambiente seguro do ETL.
 
 ## Organização do repositório

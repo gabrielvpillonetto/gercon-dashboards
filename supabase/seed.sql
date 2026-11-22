@@ -22,7 +22,7 @@ VALUES
     2025, 9000001, 'c0ed7103-fcbd-438e-a0c6-dd030248a1e0', NULL,
     '2026-11-22', '2025-01-15', NULL,
     'DADO DE TESTE - Cardiologia', 'DADO DE TESTE - Cardiologia',
-    'I10', 'AMARELO', 'PORTO ALEGRE',
+    'I10', 'Amarelo (Prioritário)', 'PORTO ALEGRE',
     'DADO DE TESTE - UBS Centro', 'DADO DE TESTE - Unidade Norte',
     'AGUARDANDO', 'Aguardando', 45
   ),
@@ -30,7 +30,7 @@ VALUES
     2025, 9000002, 'c0ed7103-fcbd-438e-a0c6-dd030248a1e0', NULL,
     '2026-11-22', '2025-03-10', '2025-05-20',
     'DADO DE TESTE - Oftalmologia', 'DADO DE TESTE - Oftalmologia',
-    'H40', 'VERDE', 'PORTO ALEGRE',
+    'H40', 'Verde (Pouco Urgente)', 'PORTO ALEGRE',
     'DADO DE TESTE - UBS Sul', 'DADO DE TESTE - Unidade Centro',
     'AGENDADA', 'Agendado', 71
   ),
@@ -38,7 +38,7 @@ VALUES
     2025, 9000003, 'c0ed7103-fcbd-438e-a0c6-dd030248a1e0', NULL,
     '2026-11-22', '2025-06-02', '2025-07-14',
     'DADO DE TESTE - Ortopedia', 'DADO DE TESTE - Ortopedia',
-    'M25', 'VERMELHO', 'PORTO ALEGRE',
+    'M25', 'Vermelho (Urgente)', 'PORTO ALEGRE',
     'DADO DE TESTE - UBS Leste', 'DADO DE TESTE - Unidade Sul',
     'REALIZADA', 'Atendido', 42
   ),
@@ -46,7 +46,7 @@ VALUES
     2025, 9000004, 'c0ed7103-fcbd-438e-a0c6-dd030248a1e0', NULL,
     '2026-11-22', '2025-09-18', NULL,
     'DADO DE TESTE - Dermatologia', 'DADO DE TESTE - Dermatologia',
-    'L30', 'AZUL', 'CANOAS',
+    'L30', 'Azul (Eletivo)', 'CANOAS',
     'DADO DE TESTE - UBS Norte', 'DADO DE TESTE - Unidade Leste',
     'CANCELADA', 'Cancelado', 23
   )
@@ -106,13 +106,13 @@ FROM (
 ) AS anos (ano, ckan_resource_id)
 CROSS JOIN (
   VALUES
-    (1, 1, 15, NULL::int, 'DADO DE TESTE - Cardiologia', 'I10', 'AMARELO', 'PORTO ALEGRE',
+    (1, 1, 15, NULL::int, 'DADO DE TESTE - Cardiologia', 'I10', 'Amarelo (Prioritário)', 'PORTO ALEGRE',
      'DADO DE TESTE - UBS Centro', 'DADO DE TESTE - Unidade Norte', 'AGUARDANDO', 'Aguardando', 45),
-    (2, 3, 10, 71, 'DADO DE TESTE - Oftalmologia', 'H40', 'VERDE', 'PORTO ALEGRE',
+    (2, 3, 10, 71, 'DADO DE TESTE - Oftalmologia', 'H40', 'Verde (Pouco Urgente)', 'PORTO ALEGRE',
      'DADO DE TESTE - UBS Sul', 'DADO DE TESTE - Unidade Centro', 'AGENDADA', 'Agendado', 71),
-    (3, 6, 2, 42, 'DADO DE TESTE - Ortopedia', 'M25', 'VERMELHO', 'PORTO ALEGRE',
+    (3, 6, 2, 42, 'DADO DE TESTE - Ortopedia', 'M25', 'Vermelho (Urgente)', 'PORTO ALEGRE',
      'DADO DE TESTE - UBS Leste', 'DADO DE TESTE - Unidade Sul', 'REALIZADA', 'Atendido', 42),
-    (4, 9, 18, NULL::int, 'DADO DE TESTE - Dermatologia', 'L30', 'AZUL', 'CANOAS',
+    (4, 9, 18, NULL::int, 'DADO DE TESTE - Dermatologia', 'L30', 'Azul (Eletivo)', 'CANOAS',
      'DADO DE TESTE - UBS Norte', 'DADO DE TESTE - Unidade Leste', 'CANCELADA', 'Cancelado', 23)
 ) AS modelo (
   n, mes, dia, dias_ate_agendamento, especialidade, cid, classificacao_risco, municipio_residencia,
